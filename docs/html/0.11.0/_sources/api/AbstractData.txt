@@ -2,11 +2,6 @@
 CRUDlex\\AbstractData
 ---------------------
 
-.. toctree::
-  :maxdepth: 1
-
-  MySQLData
-
 .. php:namespace: CRUDlex
 
 .. php:class:: AbstractData
@@ -94,6 +89,37 @@ CRUDlex\\AbstractData
         :param $id: the id of the entity to enrich
         :type $entity: Entity
         :param $entity: the entity to enrich
+
+    .. php:method:: getManyFields()
+
+        Gets the many-to-many fields.
+
+        :returns: array|\string[] the many-to-many fields
+
+    .. php:method:: getFormFields()
+
+        Gets all form fields including the many-to-many-ones.
+
+        :returns: array all form fields
+
+    .. php:method:: deleteChildren($id, $deleteCascade)
+
+        Performs the cascading children deletion.
+
+        :type $id: integer
+        :param $id: the current entities id
+        :type $deleteCascade: boolean
+        :param $deleteCascade: whether to delete children and sub children
+
+    .. php:method:: getReferenceIds($entities, $field)
+
+        Gets an array of reference ids for the given entities.
+
+        :type $entities: array
+        :param $entities: the entities to extract the ids
+        :type $field: string
+        :param $field: the reference field
+        :returns: array the extracted ids
 
     .. php:method:: pushEvent($moment, $action, Closure $function)
 
@@ -198,15 +224,6 @@ CRUDlex\\AbstractData
         :type $excludeDeleted: boolean
         :param $excludeDeleted: false, if soft deleted entries in the datasource should be counted, too
         :returns: integer the count fulfilling the given parameters
-
-    .. php:method:: fetchReferences($entities = null)
-
-        Adds the id and name of referenced entities to the given entities. Each
-        reference field is before the raw id of the referenced entity and after
-        the fetch, it's an array with the keys id and name.
-
-        :param $entities:
-        :returns: void
 
     .. php:method:: hasManySet($field, $thatIds, $excludeId = null)
 

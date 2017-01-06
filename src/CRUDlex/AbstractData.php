@@ -145,6 +145,72 @@ abstract class AbstractData {
         $entity->set('updated_at', $createdEntity->get('updated_at'));
     }
 
+    /**
+     * Gets the many-to-many fields.
+     *
+     * @return array|\string[]
+     * the many-to-many fields
+     */
+    protected function getManyFields() {
+        $fields = $this->definition->getFieldNames(true);
+        return array_filter($fields, function($field) {
+            return $this->definition->getType($field) === 'many';
+        });
+    }
+
+    /**
+     * Gets all form fields including the many-to-many-ones.
+     *
+     * @return array
+     * all form fields
+     */
+    protected function getFormFields() {
+        $manyFields = $this->getManyFields();
+        $formFields = [];
+        foreach ($this->definition->getEditableFieldNames() as $field) {
+            if (!in_array($field, $manyFields)) {
+                $formFields[] = $field;
+            }
+        }
+        return $formFields;
+    }
+
+    /**
+     * Performs the cascading children deletion.
+     *
+     * @param integer $id
+     * the current entities id
+     * @param boolean $deleteCascade
+     * whether to delete children and sub children
+     */
+    protected function deleteChildren($id, $deleteCascade) {
+        foreach ($this->definition->getChildren() as $childArray) {
+            $childData = $this->definition->getServiceProvider()->getData($childArray[2]);
+            $children  = $childData->listEntries([$childArray[1] => $id]);
+            foreach ($children as $child) {
+                $childData->doDelete($child, $deleteCascade);
+            }
+        }
+    }
+
+    /**
+     * Gets an array of reference ids for the given entities.
+     *
+     * @param array $entities
+     * the entities to extract the ids
+     * @param string $field
+     * the reference field
+     *
+     * @return array
+     * the extracted ids
+     */
+    protected function getReferenceIds(array $entities, $field) {
+        $ids = array_map(function(Entity $entity) use ($field) {
+            $id = $entity->get($field);
+            return is_array($id) ? $id['id'] : $id;
+        }, $entities);
+        return $ids;
+    }
 
     /**
      * Adds an event to fire for the given parameters. The event function must
@@ -292,18 +358,6 @@ abstract class AbstractData {
      * the count fulfilling the given parameters
      */
     abstract public function countBy($table, array $params, array $paramsOperators, $excludeDeleted);
-
-    /**
-     * Adds the id and name of referenced entities to the given entities. Each
-     * reference field is before the raw id of the referenced entity and after
-     * the fetch, it's an array with the keys id and name.
-     *
-     * @param Entity[] &$entities
-     * the entities to fetch the references for
-     *
-     * @return void
-     */
-    abstract public function fetchReferences(array &$entities = null);
 
     /**
      * Checks whether a given set of ids is assigned to any entity exactly

@@ -30,36 +30,6 @@ class MySQLData extends AbstractData {
     protected $useUUIDs;
 
     /**
-     * Gets the many-to-many fields.
-     *
-     * @return array|\string[]
-     * the many-to-many fields
-     */
-    protected function getManyFields() {
-        $fields = $this->definition->getFieldNames(true);
-        return array_filter($fields, function($field) {
-            return $this->definition->getType($field) === 'many';
-        });
-    }
-
-    /**
-     * Gets all form fields including the many-to-many-ones.
-     *
-     * @return array
-     * all form fields
-     */
-    protected function getFormFields() {
-        $manyFields = $this->getManyFields();
-        $formFields = [];
-        foreach ($this->definition->getEditableFieldNames() as $field) {
-            if (!in_array($field, $manyFields)) {
-                $formFields[] = $field;
-            }
-        }
-        return $formFields;
-    }
-
-    /**
      * Sets the values and parameters of the upcoming given query according
      * to the entity.
      *
@@ -79,26 +49,11 @@ class MySQLData extends AbstractData {
             if ($type == 'boolean') {
                 $value = $value ? 1 : 0;
             }
+            if ($type == 'reference' && is_array($value)) {
+                $value = $value['id'];
+            }
             $queryBuilder->$setMethod('`'.$formFields[$i].'`', '?');
             $queryBuilder->setParameter($i, $value);
-        }
-    }
-
-    /**
-     * Performs the cascading children deletion.
-     *
-     * @param integer $id
-     * the current entities id
-     * @param boolean $deleteCascade
-     * whether to delete children and sub children
-     */
-    protected function deleteChildren($id, $deleteCascade) {
-        foreach ($this->definition->getChildren() as $childArray) {
-            $childData = $this->definition->getServiceProvider()->getData($childArray[2]);
-            $children  = $childData->listEntries([$childArray[1] => $id]);
-            foreach ($children as $child) {
-                $childData->doDelete($child, $deleteCascade);
-            }
         }
     }
 
@@ -281,9 +236,7 @@ class MySQLData extends AbstractData {
         $nameField    = $this->definition->getSubTypeField($field, 'reference', 'nameField');
         $queryBuilder = $this->database->createQueryBuilder();
 
-        $ids = array_map(function(Entity $entity) use ($field) {
-            return $entity->get($field);
-        }, $entities);
+        $ids = $this->getReferenceIds($entities, $field);
 
         $referenceEntity = $this->definition->getSubTypeField($field, 'reference', 'entity');
         $table           = $this->definition->getServiceProvider()->getData($referenceEntity)->getDefinition()->getTable();
@@ -411,6 +364,28 @@ class MySQLData extends AbstractData {
     }
 
     /**
+     * Adds the id and name of referenced entities to the given entities. Each
+     * reference field is before the raw id of the referenced entity and after
+     * the fetch, it's an array with the keys id and name.
+     *
+     * @param Entity[] &$entities
+     * the entities to fetch the references for
+     *
+     * @return void
+     */
+    protected function enrichWithReference(array &$entities) {
+        if (empty($entities)) {
+            return;
+        }
+        foreach ($this->definition->getFieldNames() as $field) {
+            if ($this->definition->getType($field) !== 'reference') {
+                continue;
+            }
+            $this->fetchReferencesForField($entities, $field);
+        }
+    }
+
+    /**
      * Constructor.
      *
      * @param EntityDefinition $definition
@@ -464,6 +439,7 @@ class MySQLData extends AbstractData {
         foreach ($rows as $row) {
             $entities[] = $this->hydrate($row);
         }
+        $this->enrichWithReference($entities);
         return $entities;
     }
 
@@ -501,8 +477,9 @@ class MySQLData extends AbstractData {
         }
 
         $this->enrichEntityWithMetaData($id, $entity);
-
         $this->saveMany($entity);
+        $entities = [$entity];
+        $this->enrichWithReference($entities);
 
         $this->shouldExecuteEvents($entity, 'after', 'create');
 
@@ -529,6 +506,8 @@ class MySQLData extends AbstractData {
         $affected = $queryBuilder->execute();
 
         $this->saveMany($entity);
+        $entities = [$entity];
+        $this->enrichWithReference($entities);
 
         $this->shouldExecuteEvents($entity, 'after', 'update');
 
@@ -602,22 +581,6 @@ class MySQLData extends AbstractData {
         $result      = $queryResult->fetch(\PDO::FETCH_NUM);
         return intval($result[0]);
     }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function fetchReferences(array &$entities = null) {
-        if (!$entities) {
-            return;
-        }
-        foreach ($this->definition->getFieldNames() as $field) {
-            if ($this->definition->getType($field) !== 'reference') {
-                continue;
-            }
-            $this->fetchReferencesForField($entities, $field);
-        }
-    }
-
 
     /**
      * {@inheritdoc}
